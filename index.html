@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>La Gracia Responde — Respuestas bíblicas claras</title>
+<meta name="description" content="Respuestas bíblicas claras, centradas en la gracia. Preguntas honestas. Respuestas bíblicas claras. Juan 1:17." />
+<style>
+  :root{
+    --blue:#2E53AB; --blue-deep:#21407f; --green:#52AD4D;
+    --ink:#1d2533; --muted:#697186; --line:#e6e9f1;
+    --cream:#f6f4ee; --paper:#ffffff;
+    --serif:"Georgia","Iowan Old Style","Times New Roman",serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{font-family:var(--sans);color:var(--ink);background:var(--cream);
+    background-image:radial-gradient(1200px 500px at 50% -200px,#eaf0fb 0%,rgba(234,240,251,0) 70%);
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 22px}
+  header{padding:20px 0;display:flex;align-items:center;justify-content:space-between}
+  .brand{display:flex;align-items:center;gap:11px}
+  .brand .mark{width:42px;height:42px}
+  .brand .name{font-family:var(--serif);font-weight:700;color:var(--blue);font-size:19px;line-height:1}
+  .brand .sub{font-size:11px;color:var(--muted);margin-top:2px}
+  nav a{font-size:13.5px;color:var(--muted);text-decoration:none;margin-left:22px;cursor:pointer}
+  nav a:hover{color:var(--blue)}
+  .hero{text-align:center;padding:34px 0 10px}
+  .verse{display:inline-block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);font-weight:700;margin-bottom:18px}
+  .hero h1{font-family:var(--serif);font-weight:700;color:var(--ink);font-size:clamp(30px,5vw,52px);line-height:1.06;margin:0 0 14px}
+  .hero h1 em{font-style:normal;color:var(--blue)}
+  .hero p.lede{color:var(--muted);font-size:16px;max-width:560px;margin:0 auto 26px;line-height:1.55}
+  .askbar{display:flex;gap:8px;max-width:620px;margin:0 auto;background:var(--paper);
+    border:1px solid var(--line);border-radius:16px;padding:8px 8px 8px 18px;
+    box-shadow:0 20px 45px -26px rgba(46,83,171,.45)}
+  .askbar input{flex:1;border:0;outline:0;font-size:16px;font-family:var(--sans);color:var(--ink);background:transparent}
+  .askbar button{border:0;background:var(--blue);color:#fff;font-weight:600;font-size:15px;border-radius:11px;padding:12px 20px;cursor:pointer;transition:.15s}
+  .askbar button:hover{background:var(--blue-deep)}
+  .langs{font-size:12.5px;color:var(--muted);margin-top:12px}
+  .section-title{font-family:var(--serif);font-size:15px;color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:.12em;margin:46px 0 18px}
+  .topics{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;padding-bottom:30px}
+  .topic{background:var(--paper);border:1px solid var(--line);border-radius:13px;padding:16px;cursor:pointer;transition:.15s;display:flex;align-items:center;gap:11px}
+  .topic:hover{border-color:var(--blue);transform:translateY(-2px);box-shadow:0 14px 30px -22px rgba(46,83,171,.5)}
+  .topic .dot{width:9px;height:9px;border-radius:50%;background:var(--green);flex-shrink:0}
+  .topic span{font-size:14px;font-weight:500}
+  #chatSection{display:none;padding:8px 0 50px}
+  .chatcard{max-width:720px;margin:0 auto;background:var(--paper);border:1px solid var(--line);border-radius:20px;overflow:hidden;box-shadow:0 26px 60px -30px rgba(46,83,171,.4)}
+  .chathead{display:flex;align-items:center;gap:11px;padding:15px 18px;border-bottom:1px solid #eef1f6;background:#fbfcfe}
+  .chathead .mark{width:36px;height:36px}
+  .chathead .t{font-family:var(--serif);font-weight:700;color:var(--blue);font-size:17px;line-height:1}
+  .chathead .s{font-size:11.5px;color:var(--muted);margin-top:3px}
+  .msgs{height:420px;overflow-y:auto;padding:20px;background:#f7f9fc}
+  .row{display:flex;margin-bottom:16px}
+  .row.me{justify-content:flex-end}
+  .bub{max-width:84%;font-size:14.6px;line-height:1.62;border-radius:16px;padding:11px 15px;white-space:pre-wrap}
+  .bub.me{background:var(--blue);color:#fff;border-radius:16px 16px 4px 16px}
+  .bub.bot{background:#fff;border:1px solid #e8ecf3;color:var(--ink);border-radius:16px 16px 16px 4px}
+  .row.bot{gap:9px;align-items:flex-start}
+  .row.bot .av{width:28px;height:28px;flex-shrink:0;margin-top:2px}
+  .typing{color:#8a93a3;font-size:13.5px;display:flex;align-items:center;gap:9px}
+  .spin{width:14px;height:14px;border:2px solid #c7d0e4;border-top-color:var(--blue);border-radius:50%;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .composer{display:flex;gap:8px;padding:12px;border-top:1px solid #eef1f6;background:#fff}
+  .composer input{flex:1;border:1px solid #dde3ee;border-radius:12px;padding:11px 14px;font-size:14.6px;outline:0;font-family:var(--sans)}
+  .composer input:focus{border-color:var(--blue)}
+  .composer button{border:0;background:var(--blue);color:#fff;border-radius:11px;padding:0 18px;font-weight:600;cursor:pointer}
+  .disclaimer{text-align:center;font-size:11px;color:#9aa3b2;padding:10px}
+  footer{border-top:1px solid var(--line);background:#fff;padding:26px 0;margin-top:10px}
+  footer .wrap{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;align-items:center}
+  footer .infl{font-size:12.5px;color:var(--muted);max-width:560px;line-height:1.5}
+  footer .infl b{color:var(--ink);font-weight:600}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <div class="mark" id="markHead"></div>
+        <div>
+          <div class="name">La Gracia Responde</div>
+          <div class="sub">con el Pastor Luis Antonio Valera</div>
+        </div>
+      </div>
+      <nav>
+        <a href="#temas">Temas</a>
+        <a onclick="openChat()">Preguntar</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <span class="verse">Juan 1:17 · Gracia y verdad</span>
+      <h1>¿Cuál es tu <em>pregunta bíblica</em>?</h1>
+      <p class="lede">Respuestas claras y centradas en la gracia, directamente desde la Escritura.
+        Preguntas honestas. Respuestas bíblicas claras.</p>
+      <div class="askbar">
+        <input id="heroInput" placeholder="Escribe tu pregunta… p. ej. ¿Estoy perdonado para siempre?"
+          onkeydown="if(event.key==='Enter'){askFromHero()}" />
+        <button onclick="askFromHero()">Preguntar</button>
+      </div>
+      <div class="langs">Pregunta en cualquier idioma · Ask in any language</div>
+    </section>
+
+    <section id="chatSection">
+      <div class="chatcard">
+        <div class="chathead">
+          <div class="mark" id="markChat"></div>
+          <div>
+            <div class="t">La Gracia Responde</div>
+            <div class="s">Respuestas bíblicas, centradas en la gracia</div>
+          </div>
+        </div>
+        <div class="msgs" id="msgs"></div>
+        <div class="composer">
+          <input id="chatInput" placeholder="Escribe tu pregunta…" onkeydown="if(event.key==='Enter'){send()}" />
+          <button onclick="send()">Enviar</button>
+        </div>
+        <div class="disclaimer">Esta es una ayuda de estudio bíblico; no sustituye a tu pastor ni a tu iglesia local.</div>
+      </div>
+    </section>
+
+    <h2 class="section-title" id="temas">Explora por tema</h2>
+    <section class="topics" id="topics"></section>
+  </div>
+
+  <footer>
+    <div class="wrap">
+      <div class="infl">
+        Enseñanza bíblica en la tradición del evangelio de la gracia y el nuevo pacto, con el
+        <b>Pastor Luis Antonio Valera</b>. Toda respuesta se fundamenta en la Escritura.
+      </div>
+      <div style="font-size:12.5px;color:var(--muted)">© La Gracia Responde · lagraciaresponde.com</div>
+    </div>
+  </footer>
+
+<script>
+const EMBLEM = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+<path d="M 89.72 330 L 67.31 409.96 L 162.92 401.93 Z" fill="#2E53AB"/>
+<path d="M 60 234 a 196 196 0 1 1 392 0 a 196 196 0 1 1 -392 0 Z M 88 234 a 168 168 0 1 0 336 0 a 168 168 0 1 0 -336 0 Z" fill="#2E53AB" fill-rule="evenodd"/>
+<line x1="347.3" y1="196.33" x2="381.54" y2="185.21" stroke="#52AD4D" stroke-width="13" stroke-linecap="round"/>
+<line x1="327.34" y1="161.76" x2="354.1" y2="137.67" stroke="#52AD4D" stroke-width="13" stroke-linecap="round"/>
+<line x1="295.05" y1="138.3" x2="309.69" y2="105.41" stroke="#52AD4D" stroke-width="13" stroke-linecap="round"/>
+<line x1="256" y1="130" x2="256" y2="94" stroke="#52AD4D" stroke-width="13" stroke-linecap="round"/>
+<line x1="216.95" y1="138.3" x2="202.31" y2="105.41" stroke="#52AD4D" stroke-width="13" stroke-linecap="round"/>
+<line x1="184.66" y1="161.76" x2="157.9" y2="137.67" stroke="#52AD4D" stroke-width="13" stroke-linecap="round"/>
+<line x1="164.7" y1="196.33" x2="130.46" y2="185.21" stroke="#52AD4D" stroke-width="13" stroke-linecap="round"/>
+<rect x="242.5" y="200" width="27" height="152" rx="3" fill="#52AD4D"/>
+<rect x="208" y="228.5" width="96" height="27" rx="3" fill="#52AD4D"/>
+<path d="M 256 342 C 202 327, 148 332, 122 354 M 256 342 C 310 327, 364 332, 390 354" fill="none" stroke="#2E53AB" stroke-width="6.5" stroke-linecap="round"/>
+<path d="M 256 360 C 204 346, 152 352, 126 372 M 256 360 C 308 346, 360 352, 386 372" fill="none" stroke="#2E53AB" stroke-width="6.5" stroke-linecap="round"/>
+<path d="M 122 354 C 152 376, 204 382, 256 394 C 308 382, 360 376, 390 354" fill="none" stroke="#2E53AB" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M 256 342 L 256 394" stroke="#2E53AB" stroke-width="6.5" stroke-linecap="round"/></svg>`;
+document.getElementById('markHead').innerHTML = EMBLEM;
+document.getElementById('markChat').innerHTML = EMBLEM;
+
+const TOPICS = ["Salvación","Seguridad eterna","Perdón","La Ley y la gracia","Identidad en Cristo",
+"Cristo en ti","El pecado y la carne","El Espíritu Santo","Oración","Sanidad","Ansiedad y descanso","Versículos difíciles"];
+const TOPIC_Q = {
+ "Salvación":"¿Cómo soy salvo según la Biblia?",
+ "Seguridad eterna":"¿Puede un creyente perder su salvación?",
+ "Perdón":"¿Estoy perdonado para siempre en Cristo?",
+ "La Ley y la gracia":"¿Está el creyente bajo la ley de Moisés?",
+ "Identidad en Cristo":"¿Quién soy yo ahora en Cristo?",
+ "Cristo en ti":"¿Qué significa que Cristo vive en mí?",
+ "El pecado y la carne":"¿Qué hago cuando lucho con el pecado?",
+ "El Espíritu Santo":"¿Cómo me guía y me capacita el Espíritu Santo?",
+ "Oración":"¿Cómo debo orar como hijo de Dios?",
+ "Sanidad":"¿Qué enseña la Biblia sobre la sanidad?",
+ "Ansiedad y descanso":"¿Qué dice la Biblia sobre la ansiedad y el descanso?",
+ "Versículos difíciles":"Explícame Hebreos 6:4-6 a la luz de la gracia."
+};
+const topicsEl = document.getElementById('topics');
+TOPICS.forEach(t=>{
+  const d=document.createElement('div'); d.className='topic';
+  d.innerHTML='<span class="dot"></span><span>'+t+'</span>';
+  d.onclick=()=>{ openChat(); send(TOPIC_Q[t]||('Háblame sobre: '+t)); };
+  topicsEl.appendChild(d);
+});
+
+let history = [];
+const msgsEl = document.getElementById('msgs');
+function openChat(){
+  document.getElementById('chatSection').style.display='block';
+  document.getElementById('chatSection').scrollIntoView({behavior:'smooth',block:'start'});
+}
+function askFromHero(){
+  const v=document.getElementById('heroInput').value.trim(); if(!v) return;
+  document.getElementById('heroInput').value=''; openChat(); send(v);
+}
+function render(){
+  msgsEl.innerHTML = history.map(m => m.role==='user'
+    ? '<div class="row me"><div class="bub me"></div></div>'
+    : '<div class="row bot"><div class="av">'+EMBLEM+'</div><div class="bub bot"></div></div>'
+  ).join('');
+  const bubs = msgsEl.querySelectorAll('.bub');
+  history.forEach((m,i)=>{ bubs[i].textContent = m.content; });
+  msgsEl.scrollTop = msgsEl.scrollHeight;
+}
+function setTyping(on){
+  let t=document.getElementById('typing');
+  if(on){ if(!t){ t=document.createElement('div'); t.id='typing'; t.className='row bot';
+    t.innerHTML='<div class="av">'+EMBLEM+'</div><div class="typing"><span class="spin"></span>Buscando en la Palabra…</div>';
+    msgsEl.appendChild(t); msgsEl.scrollTop=msgsEl.scrollHeight; } }
+  else if(t){ t.remove(); }
+}
+async function send(text){
+  const input=document.getElementById('chatInput');
+  const content=(text!==undefined?text:input.value).trim(); if(!content) return;
+  if(text===undefined) input.value='';
+  history.push({role:'user',content}); render(); setTyping(true);
+  try{
+    const res=await fetch("/api/chat",{
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({messages:history.map(m=>({role:m.role,content:m.content}))})
+    });
+    const data=await res.json(); setTyping(false);
+    history.push({role:'assistant',content:data.reply || data.error || "No pude responder. Intenta de nuevo."});
+    render();
+  }catch(e){
+    setTyping(false);
+    history.push({role:'assistant',content:"Hubo un problema de conexión. Intenta de nuevo."});
+    render();
+  }
+}
+</script>
+</body>
+</html>
