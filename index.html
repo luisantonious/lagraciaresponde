@@ -56,6 +56,10 @@
   .bub{max-width:84%;font-size:14.6px;line-height:1.62;border-radius:16px;padding:11px 15px;white-space:pre-wrap}
   .bub.me{background:var(--blue);color:#fff;border-radius:16px 16px 4px 16px}
   .bub.bot{background:#fff;border:1px solid #e8ecf3;color:var(--ink);border-radius:16px 16px 16px 4px}
+  .bub.bot strong{font-weight:700;color:var(--ink)}
+  .bub.bot em{font-style:italic}
+  .bub.bot a{color:var(--blue);font-weight:600;text-decoration:underline}
+  .bub.bot hr.sep{border:0;border-top:1px solid #e8ecf3;margin:10px 0}
   .row.bot{gap:9px;align-items:flex-start}
   .row.bot .av{width:28px;height:28px;flex-shrink:0;margin-top:2px}
   .typing{color:#8a93a3;font-size:13.5px;display:flex;align-items:center;gap:9px}
@@ -126,7 +130,7 @@
   <footer>
     <div class="wrap">
       <div class="infl">
-        Enseñanza bíblica en la tradición del evangelio de la gracia y el nuevo pacto, con el
+        Enseñanza bíblica de acuerdo a la gracia y la verdad del Evangelio en el Nuevo Pacto con el
         <b>Pastor Luis Antonio Valera</b>. Toda respuesta se fundamenta en la Escritura.
       </div>
       <div style="font-size:12.5px;color:var(--muted)">© La Gracia Responde · lagraciaresponde.com</div>
@@ -187,13 +191,26 @@ function askFromHero(){
   const v=document.getElementById('heroInput').value.trim(); if(!v) return;
   document.getElementById('heroInput').value=''; openChat(); send(v);
 }
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function formatBot(t){
+  let s = esc(t);
+  s = s.replace(/^\s*---\s*$/gm, '<hr class="sep">');
+  s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/(^|[^"'>=])(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
+  return s;
+}
 function render(){
   msgsEl.innerHTML = history.map(m => m.role==='user'
     ? '<div class="row me"><div class="bub me"></div></div>'
     : '<div class="row bot"><div class="av">'+EMBLEM+'</div><div class="bub bot"></div></div>'
   ).join('');
   const bubs = msgsEl.querySelectorAll('.bub');
-  history.forEach((m,i)=>{ bubs[i].textContent = m.content; });
+  history.forEach((m,i)=>{
+    if(m.role==='user') bubs[i].textContent = m.content;
+    else bubs[i].innerHTML = formatBot(m.content);
+  });
   msgsEl.scrollTop = msgsEl.scrollHeight;
 }
 function setTyping(on){
