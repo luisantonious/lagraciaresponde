@@ -78,6 +78,16 @@
   footer .wrap{display:flex;flex-wrap:wrap;gap:18px;justify-content:space-between;align-items:center}
   footer .infl{font-size:12.5px;color:var(--muted);max-width:560px;line-height:1.5}
   footer .infl b{color:var(--ink);font-weight:600}
+  nav a{cursor:pointer}
+  .shareOverlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(20,30,60,.45);display:none;align-items:center;justify-content:center;z-index:1000;padding:18px}
+  .shareOverlay.open{display:flex}
+  .shareCard{background:#fff;border-radius:18px;padding:24px;max-width:340px;width:100%;box-shadow:0 30px 70px -20px rgba(0,0,0,.4);text-align:center}
+  .shareCard h3{font-family:var(--serif);color:var(--blue);margin:0 0 4px;font-size:20px}
+  .shareCard p{color:var(--muted);font-size:13.5px;margin:0 0 16px}
+  .shareCard a,.shareCard button{display:flex;align-items:center;justify-content:center;width:100%;border:1px solid var(--line);background:#fff;border-radius:12px;padding:12px;margin:8px 0;font-size:15px;font-weight:600;color:var(--ink);text-decoration:none;cursor:pointer;font-family:var(--sans)}
+  .shareCard a:hover,.shareCard button:hover{background:#f4f6fb}
+  .shareCard a.wa{color:#fff;background:#25D366;border-color:#25D366}
+  .shareCard .shareClose{border:0;background:none;color:var(--muted);font-size:13px;margin-top:8px;font-weight:500}
 </style>
 </head>
 <body>
@@ -94,6 +104,7 @@
         <a href="#temas">Temas</a>
         <a onclick="openChat()">Preguntar</a>
         <a href="/quien-soy.html">Quién soy</a>
+        <a onclick="shareSite(event)">Compartir</a>
       </nav>
     </header>
 
@@ -244,6 +255,26 @@ async function send(text){
     render();
   }
 }
+const SHARE_URL='https://lagraciaresponde.com';
+const SHARE_TEXT='La Gracia Responde — respuestas bíblicas claras, gratis y a cualquier hora. Pregunta y ora aquí:';
+async function shareSite(e){ if(e&&e.preventDefault)e.preventDefault();
+  if(navigator.share){ try{ await navigator.share({title:'La Gracia Responde',text:SHARE_TEXT,url:SHARE_URL}); return; }catch(err){ if(err&&err.name==='AbortError')return; } }
+  document.getElementById('shWa').href='https://wa.me/?text='+encodeURIComponent(SHARE_TEXT+' '+SHARE_URL);
+  document.getElementById('shMail').href='mailto:?subject='+encodeURIComponent('La Gracia Responde')+'&body='+encodeURIComponent(SHARE_TEXT+'\n'+SHARE_URL);
+  document.getElementById('shareOverlay').classList.add('open');
+}
+function closeShare(){ document.getElementById('shareOverlay').classList.remove('open'); }
+async function copyShare(e){ try{ await navigator.clipboard.writeText(SHARE_URL); const b=e&&e.target; if(b){const t=b.textContent;b.textContent='¡Enlace copiado!';setTimeout(function(){b.textContent=t;},1500);} else { alert('Enlace copiado: '+SHARE_URL);} }catch(err){ alert(SHARE_URL); } }
 </script>
+<div class="shareOverlay" id="shareOverlay" onclick="if(event.target===this)closeShare()">
+  <div class="shareCard">
+    <h3>Compartir La Gracia Responde</h3>
+    <p>Ayuda a alguien a encontrar respuestas de gracia.</p>
+    <a class="wa" id="shWa" target="_blank" rel="noopener">Compartir por WhatsApp</a>
+    <a id="shMail">Enviar por correo</a>
+    <button type="button" onclick="copyShare(event)">Copiar enlace</button>
+    <button type="button" class="shareClose" onclick="closeShare()">Cerrar</button>
+  </div>
+</div>
 </body>
 </html>
