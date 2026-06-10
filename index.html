@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -88,6 +89,16 @@
   .shareCard a:hover,.shareCard button:hover{background:#f4f6fb}
   .shareCard a.wa{color:#fff;background:#25D366;border-color:#25D366}
   .shareCard .shareClose{border:0;background:none;color:var(--muted);font-size:13px;margin-top:8px;font-weight:500}
+  /* Share response button */
+  .share-reply-btn{
+    display:inline-flex;align-items:center;gap:5px;margin-top:8px;
+    background:none;border:1px solid #dde3ee;border-radius:20px;
+    padding:5px 12px;font-size:12px;color:var(--muted);cursor:pointer;
+    font-family:var(--sans);transition:.15s;
+  }
+  .share-reply-btn:hover{border-color:var(--blue);color:var(--blue);background:#f0f4ff}
+  .share-reply-btn svg{flex-shrink:0}
+  .row.bot .bot-actions{display:flex;padding-left:37px;margin-top:-8px;margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -217,18 +228,63 @@ function formatBot(t){
   s = s.replace(/(^|[^"'>=])(https?:\/\/[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener">$2</a>');
   return s;
 }
+
+const SHARE_URL='https://lagraciaresponde.com';
+const SHARE_TEXT='La Gracia Responde — respuestas bíblicas claras, gratis y a cualquier hora. Pregunta y ora aquí:';
+
+function shareReply(question, answer){
+  const text = '❓ Le pregunté a La Gracia Responde:\n"' + question + '"\n\n💬 Respuesta:\n' + answer.substring(0,300) + (answer.length>300?'…':'') + '\n\n👉 Pregunta tú también: ' + SHARE_URL;
+  if(navigator.share){
+    navigator.share({title:'La Gracia Responde',text:text,url:SHARE_URL}).catch(()=>{});
+    return;
+  }
+  // Fallback: open share overlay with pre-filled content
+  document.getElementById('shWa').href='https://wa.me/?text='+encodeURIComponent(text);
+  document.getElementById('shMail').href='mailto:?subject='+encodeURIComponent('Mira lo que encontré en La Gracia Responde')+'&body='+encodeURIComponent(text);
+  window._shareReplyText = text;
+  document.getElementById('shareOverlay').classList.add('open');
+}
+
 function render(){
-  msgsEl.innerHTML = history.map(m => m.role==='user'
-    ? '<div class="row me"><div class="bub me"></div></div>'
-    : '<div class="row bot"><div class="av">'+EMBLEM+'</div><div class="bub bot"></div></div>'
-  ).join('');
-  const bubs = msgsEl.querySelectorAll('.bub');
-  history.forEach((m,i)=>{
-    if(m.role==='user') bubs[i].textContent = m.content;
-    else bubs[i].innerHTML = formatBot(m.content);
-  });
+  msgsEl.innerHTML = '';
+  // Pair up user questions with bot answers
+  for(let i=0;i<history.length;i++){
+    const m = history[i];
+    if(m.role==='user'){
+      const div = document.createElement('div');
+      div.className='row me';
+      const bub = document.createElement('div');
+      bub.className='bub me';
+      bub.textContent = m.content;
+      div.appendChild(bub);
+      msgsEl.appendChild(div);
+    } else {
+      // Bot message
+      const div = document.createElement('div');
+      div.className='row bot';
+      div.innerHTML='<div class="av">'+EMBLEM+'</div>';
+      const bub = document.createElement('div');
+      bub.className='bub bot';
+      bub.innerHTML = formatBot(m.content);
+      div.appendChild(bub);
+      msgsEl.appendChild(div);
+
+      // Share button below bot response
+      const question = (i>0 && history[i-1].role==='user') ? history[i-1].content : '';
+      const answer = m.content;
+      const actions = document.createElement('div');
+      actions.className='bot-actions';
+      const btn = document.createElement('button');
+      btn.className='share-reply-btn';
+      btn.innerHTML='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> Compartir esta respuesta';
+      btn.onclick = ()=>shareReply(question, answer);
+      actions.appendChild(btn);
+      msgsEl.appendChild(actions);
+    }
+  }
   msgsEl.scrollTop = msgsEl.scrollHeight;
 }
+
 function setTyping(on){
   let t=document.getElementById('typing');
   if(on){ if(!t){ t=document.createElement('div'); t.id='typing'; t.className='row bot';
@@ -255,8 +311,7 @@ async function send(text){
     render();
   }
 }
-const SHARE_URL='https://lagraciaresponde.com';
-const SHARE_TEXT='La Gracia Responde — respuestas bíblicas claras, gratis y a cualquier hora. Pregunta y ora aquí:';
+
 async function shareSite(e){ if(e&&e.preventDefault)e.preventDefault();
   if(navigator.share){ try{ await navigator.share({title:'La Gracia Responde',text:SHARE_TEXT,url:SHARE_URL}); return; }catch(err){ if(err&&err.name==='AbortError')return; } }
   document.getElementById('shWa').href='https://wa.me/?text='+encodeURIComponent(SHARE_TEXT+' '+SHARE_URL);
@@ -264,7 +319,16 @@ async function shareSite(e){ if(e&&e.preventDefault)e.preventDefault();
   document.getElementById('shareOverlay').classList.add('open');
 }
 function closeShare(){ document.getElementById('shareOverlay').classList.remove('open'); }
-async function copyShare(e){ try{ await navigator.clipboard.writeText(SHARE_URL); const b=e&&e.target; if(b){const t=b.textContent;b.textContent='¡Enlace copiado!';setTimeout(function(){b.textContent=t;},1500);} else { alert('Enlace copiado: '+SHARE_URL);} }catch(err){ alert(SHARE_URL); } }
+async function copyShare(e){
+  const textToCopy = window._shareReplyText || SHARE_URL;
+  window._shareReplyText = null;
+  try{
+    await navigator.clipboard.writeText(textToCopy);
+    const b=e&&e.target;
+    if(b){const t=b.textContent;b.textContent='¡Copiado!';setTimeout(function(){b.textContent=t;},1500);}
+    else { alert('Copiado: '+textToCopy); }
+  }catch(err){ alert(textToCopy); }
+}
 </script>
 <div class="shareOverlay" id="shareOverlay" onclick="if(event.target===this)closeShare()">
   <div class="shareCard">
