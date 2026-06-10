@@ -87,11 +87,18 @@ async function getReply(system, messages) {
       "content-type": "application/json",
       "x-api-key": process.env.ANTHROPIC_API_KEY,
       "anthropic-version": "2023-06-01",
+      "anthropic-beta": "prompt-caching-2024-07-31",  // ✅ PROMPT CACHING ACTIVADO
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
       max_tokens: 1024,
-      system,
+      system: [
+        {
+          type: "text",
+          text: system,
+          cache_control: { type: "ephemeral" },  // ✅ Cachea el system prompt completo
+        },
+      ],
       messages: messages.map((m) => ({ role: m.role, content: String(m.content || "") })),
     }),
   });
