@@ -1,10 +1,13 @@
 // api/chat.js  —  El "cerebro" del bot. Aquí vive tu llave de Anthropic (nunca en el navegador).
 // Integra: la BASE de enseñanza del Pastor Valera, no-atribución, brevedad, oración, crisis y selector de versión.
 //
-// ✅ NUEVO (jun 2026): REINTENTOS AUTOMÁTICOS. Si la API de Anthropic falla con un error
-// pasajero (429 rate limit, 500/502/503, 529 sobrecarga) o hay un hipo de red, el código
-// espera un instante y vuelve a intentar hasta 4 veces. El usuario no se entera. Esto elimina
-// casi todos los 500 intermitentes que se veían bajo carga (tráfico de Facebook, picos, etc.).
+// ✅ jun 2026 #1: REINTENTOS AUTOMÁTICOS ante errores pasajeros de la API (429/500/502/503/529).
+// ✅ jun 2026 #2: STREAMING. La respuesta sale FRASE POR FRASE en tiempo real (se siente instantánea
+//    en vivo). El filtro anti-atribución se aplica a cada frase ANTES de enviarla, así tu "REGLA
+//    ABSOLUTA" (nunca nombrar maestros) queda intacta. Si el navegador no pide streaming, se usa el
+//    modo clásico (JSON) como respaldo.
+
+export const config = { maxDuration: 60 };
 
 // ===== VERSIÓN DE LA BIBLIA =====
 // "REF" = explicación en español actual (sin derechos). "RV1909" = dominio público (literal).
@@ -86,20 +89,18 @@ function sanitize(text) {
 }
 
 // ===== REINTENTOS AUTOMÁTICOS =====
-// Estos códigos son errores PASAJEROS: vale la pena reintentar.
-// (429 = demasiadas solicitudes / 500-503 = error temporal del servidor / 529 = sobrecargado)
+// Errores PASAJEROS que vale la pena reintentar (429 = demasiadas solicitudes,
+// 500-503 = error temporal del servidor, 529 = sobrecargado).
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504, 529]);
 const MAX_INTENTOS = 4;
-
-// Espera creciente entre intentos (0.5s, 1s, 2s...) + un poco al azar para no chocar todos a la vez.
 function calcularEspera(intento) {
   const base = Math.min(500 * 2 ** (intento - 1), 4000);
   return base + Math.floor(Math.random() * 250);
 }
 const dormir = (ms) => new Promise((res) => setTimeout(res, ms));
 
-// Una sola llamada a la API (sin reintentos). La envuelve getReply.
-async function llamarAnthropic(system, messages) {
+// Una sola llamada a la API. stream=true pide la respuesta en tiempo real.
+function llamarAnthropic(system, messages, stream) {
   return fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -111,78 +112,166 @@ async function llamarAnthropic(system, messages) {
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
       max_tokens: 1024,
+      stream: !!stream,
       system: [
-        {
-          type: "text",
-          text: system,
-          cache_control: { type: "ephemeral" },  // ✅ Cachea el system prompt completo
-        },
+        { type: "text", text: system, cache_control: { type: "ephemeral" } },  // ✅ cachea el system prompt
       ],
       messages: messages.map((m) => ({ role: m.role, content: String(m.content || "") })),
     }),
   });
 }
 
-// Llama a la API con reintentos automáticos ante errores pasajeros.
+// ---- Modo clásico (sin streaming): con reintentos ----
 async function getReply(system, messages) {
   let ultimoError = null;
-
   for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
     let r;
     try {
-      r = await llamarAnthropic(system, messages);
+      r = await llamarAnthropic(system, messages, false);
     } catch (e) {
-      // Error de red / fetch falló: es pasajero, reintenta.
       ultimoError = e;
       if (intento < MAX_INTENTOS) { await dormir(calcularEspera(intento)); continue; }
       throw ultimoError;
     }
-
-    // Éxito (200): procesa y devuelve la respuesta.
     if (r.ok) {
       const data = await r.json();
       if (data.error) throw new Error(data.error.message || "Error de la API");
-      return (data.content || [])
-        .filter((b) => b.type === "text")
-        .map((b) => b.text)
-        .join("\n")
-        .trim();
+      return (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
     }
-
-    // Error PASAJERO (429, 500, 529...): espera y reintenta.
     if (RETRYABLE_STATUS.has(r.status) && intento < MAX_INTENTOS) {
-      // Si la API dice cuánto esperar (header "retry-after"), respétalo.
       const retryAfter = Number(r.headers.get("retry-after"));
-      const esperaMs = retryAfter > 0 ? retryAfter * 1000 : calcularEspera(intento);
       ultimoError = new Error(`La API respondió ${r.status}`);
-      await dormir(esperaMs);
+      await dormir(retryAfter > 0 ? retryAfter * 1000 : calcularEspera(intento));
       continue;
     }
-
-    // Error NO pasajero (400, 401, 403...) o se acabaron los intentos: falla con el mensaje real.
     let msg = `Error ${r.status} de la API`;
     try { const data = await r.json(); if (data.error?.message) msg = data.error.message; } catch {}
     throw new Error(msg);
   }
-
   throw ultimoError || new Error("Error de la API tras varios intentos");
+}
+
+// ---- Modo streaming: abre la conexión con reintentos y devuelve la respuesta cruda ----
+async function connectStreamWithRetry(system, messages) {
+  let ultimoError = null;
+  for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
+    let r;
+    try {
+      r = await llamarAnthropic(system, messages, true);
+    } catch (e) {
+      ultimoError = e;
+      if (intento < MAX_INTENTOS) { await dormir(calcularEspera(intento)); continue; }
+      throw ultimoError;
+    }
+    if (r.ok && r.body) return r;
+    if (RETRYABLE_STATUS.has(r.status) && intento < MAX_INTENTOS) {
+      const retryAfter = Number(r.headers.get("retry-after"));
+      ultimoError = new Error(`La API respondió ${r.status}`);
+      await dormir(retryAfter > 0 ? retryAfter * 1000 : calcularEspera(intento));
+      continue;
+    }
+    let msg = `Error ${r.status} de la API`;
+    try { const data = await r.json(); if (data.error?.message) msg = data.error.message; } catch {}
+    throw new Error(msg);
+  }
+  throw ultimoError || new Error("No se pudo conectar con la API");
 }
 
 export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Método no permitido" });
   if (!process.env.ANTHROPIC_API_KEY)
     return res.status(500).json({ error: "Falta configurar ANTHROPIC_API_KEY en Vercel." });
+
+  let messages, wantsStream;
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : (req.body || {});
-    const messages = Array.isArray(body.messages) ? body.messages : null;
+    messages = Array.isArray(body.messages) ? body.messages : null;
+    wantsStream = body.stream === true;
     if (!messages) return res.status(400).json({ error: "Faltan los mensajes." });
-    let reply = await getReply(SYSTEM, messages);
-    if (violates(reply)) {
-      reply = await getReply(SYSTEM + "\n\nRECORDATORIO ESTRICTO: no menciones a ningún pastor o maestro por nombre ni atribuyas la respuesta a personas. Cita únicamente la Biblia.", messages);
+  } catch {
+    return res.status(400).json({ error: "Solicitud mal formada." });
+  }
+
+  // ====== RESPALDO: modo clásico (JSON) si el navegador no pide streaming ======
+  if (!wantsStream) {
+    try {
+      let reply = await getReply(SYSTEM, messages);
+      if (violates(reply)) {
+        reply = await getReply(SYSTEM + "\n\nRECORDATORIO ESTRICTO: no menciones a ningún pastor o maestro por nombre ni atribuyas la respuesta a personas. Cita únicamente la Biblia.", messages);
+      }
+      if (violates(reply)) reply = sanitize(reply);
+      return res.status(200).json({ reply: reply || "Disculpa, no pude responder en este momento." });
+    } catch (e) {
+      return res.status(500).json({ error: "Error del servidor. Intenta de nuevo." });
     }
-    if (violates(reply)) reply = sanitize(reply);
-    return res.status(200).json({ reply: reply || "Disculpa, no pude responder en este momento." });
+  }
+
+  // ====== MODO STREAMING (frase por frase, con filtro anti-atribución) ======
+  res.statusCode = 200;
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // evita que un proxy retenga los pedacitos
+  if (typeof res.flushHeaders === "function") res.flushHeaders();
+  res.write(": ok\n\n"); // abre el canal
+
+  const sse = (obj) => { try { res.write("data: " + JSON.stringify(obj) + "\n\n"); } catch (_) {} };
+
+  let pending = "";       // texto recibido aún sin "cerrar" en frase completa
+  let emittedAny = false; // ¿ya enviamos al menos una frase?
+
+  // Detecta el fin de una frase ( . ! ? con posible comilla/paréntesis ) o un salto de línea.
+  const SENT = /[.!?]["')\]]?\s|\n/g;
+  function lastBoundary(s) {
+    let idx = -1, m; SENT.lastIndex = 0;
+    while ((m = SENT.exec(s))) idx = m.index + m[0].length;
+    return idx;
+  }
+  // Envía las frases completas; conserva el formato (saltos de línea, ---, **negritas**).
+  function flush(force) {
+    let chunk;
+    if (force) { chunk = pending; pending = ""; }
+    else {
+      const bi = lastBoundary(pending);
+      if (bi <= 0) return;
+      chunk = pending.slice(0, bi);
+      pending = pending.slice(bi);
+    }
+    if (!chunk) return;
+    if (violates(chunk)) chunk = sanitize(chunk); // ← FILTRO antes de enviar
+    if (chunk) { emittedAny = true; sse({ text: chunk }); }
+  }
+
+  try {
+    const upstream = await connectStreamWithRetry(SYSTEM, messages);
+    const reader = upstream.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n\n")) !== -1) {
+        const raw = buf.slice(0, i); buf = buf.slice(i + 2);
+        const dataLine = raw.split("\n").filter((l) => l.startsWith("data:")).map((l) => l.slice(5).trim()).join("");
+        if (!dataLine) continue;
+        let evt; try { evt = JSON.parse(dataLine); } catch { continue; }
+        if (evt.type === "content_block_delta" && evt.delta && evt.delta.type === "text_delta") {
+          pending += evt.delta.text;
+          flush(false);
+        } else if (evt.type === "error") {
+          if (!emittedAny) sse({ error: "El servicio está ocupado. Intenta de nuevo en un momento." });
+        }
+      }
+    }
+    flush(true); // envía lo que quede (última frase)
+    if (!emittedAny) sse({ text: "Disculpa, no pude responder en este momento. Intenta de nuevo." });
+    res.write("data: [DONE]\n\n");
+    res.end();
   } catch (e) {
-    return res.status(500).json({ error: "Error del servidor. Intenta de nuevo." });
+    if (!emittedAny) sse({ error: "Error del servidor. Intenta de nuevo." });
+    res.write("data: [DONE]\n\n");
+    res.end();
   }
 }
