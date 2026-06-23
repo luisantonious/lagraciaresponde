@@ -234,13 +234,26 @@ function formatBot(t){
 const SHARE_URL='https://lagraciaresponde.com';
 const SHARE_TEXT='La Gracia Responde — respuestas bíblicas claras, gratis y a cualquier hora. Pregunta y ora aquí:';
 
+// Convierte el formato Markdown de la web al formato de WhatsApp para que se vea bonito.
+// Web: **negrita** o *negrita* y _cursiva_   →   WhatsApp: *negrita* y _cursiva_
+function toWhatsApp(t){
+  let s = String(t||'');
+  s = s.replace(/^\s*---\s*$/gm, '——————');        // separador en texto plano
+  s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1: $2'); // [texto](url) → texto: url
+  s = s.replace(/\*\*([^*]+)\*\*/g, '*$1*');         // **negrita** → *negrita*
+  s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1*$2*'); // normaliza *negrita* (deja un solo asterisco)
+  return s.trim();
+}
+
 function shareReply(question, answer){
-  const text = '❓ Le pregunté a La Gracia Responde:\n"' + question + '"\n\n💬 Respuesta:\n' + answer.substring(0,300) + (answer.length>300?'…':'') + '\n\n👉 Pregunta tú también: ' + SHARE_URL;
+  // Respuesta COMPLETA, con formato WhatsApp. El enlace va UNA sola vez al final.
+  const text = '❓ Le pregunté a La Gracia Responde:\n"' + question + '"\n\n💬 Respuesta:\n' + toWhatsApp(answer) + '\n\n👉 Pregunta tú también: ' + SHARE_URL;
+  // OJO: no pasamos "url" aparte para evitar que WhatsApp muestre el enlace DUPLICADO.
   if(navigator.share){
-    navigator.share({title:'La Gracia Responde',text:text,url:SHARE_URL}).catch(()=>{});
+    navigator.share({title:'La Gracia Responde', text:text}).catch(()=>{});
     return;
   }
-  // Fallback: open share overlay with pre-filled content
+  // Respaldo: ventana de compartir con el contenido ya listo
   document.getElementById('shWa').href='https://wa.me/?text='+encodeURIComponent(text);
   document.getElementById('shMail').href='mailto:?subject='+encodeURIComponent('Mira lo que encontré en La Gracia Responde')+'&body='+encodeURIComponent(text);
   window._shareReplyText = text;
