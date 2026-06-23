@@ -1,5 +1,10 @@
 // api/chat.js  —  El "cerebro" del bot. Aquí vive tu llave de Anthropic (nunca en el navegador).
 // Integra: la BASE de enseñanza del Pastor Valera, no-atribución, brevedad, oración, crisis y selector de versión.
+//
+// ✅ NUEVO (jun 2026): REINTENTOS AUTOMÁTICOS. Si la API de Anthropic falla con un error
+// pasajero (429 rate limit, 500/502/503, 529 sobrecarga) o hay un hipo de red, el código
+// espera un instante y vuelve a intentar hasta 4 veces. El usuario no se entera. Esto elimina
+// casi todos los 500 intermitentes que se veían bajo carga (tráfico de Facebook, picos, etc.).
 
 // ===== VERSIÓN DE LA BIBLIA =====
 // "REF" = explicación en español actual (sin derechos). "RV1909" = dominio público (literal).
@@ -80,8 +85,22 @@ function sanitize(text) {
   return out || "Mi fundamento es la Palabra de Dios. Veámoslo directamente en la Escritura.";
 }
 
-async function getReply(system, messages) {
-  const r = await fetch("https://api.anthropic.com/v1/messages", {
+// ===== REINTENTOS AUTOMÁTICOS =====
+// Estos códigos son errores PASAJEROS: vale la pena reintentar.
+// (429 = demasiadas solicitudes / 500-503 = error temporal del servidor / 529 = sobrecargado)
+const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504, 529]);
+const MAX_INTENTOS = 4;
+
+// Espera creciente entre intentos (0.5s, 1s, 2s...) + un poco al azar para no chocar todos a la vez.
+function calcularEspera(intento) {
+  const base = Math.min(500 * 2 ** (intento - 1), 4000);
+  return base + Math.floor(Math.random() * 250);
+}
+const dormir = (ms) => new Promise((res) => setTimeout(res, ms));
+
+// Una sola llamada a la API (sin reintentos). La envuelve getReply.
+async function llamarAnthropic(system, messages) {
+  return fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -102,9 +121,51 @@ async function getReply(system, messages) {
       messages: messages.map((m) => ({ role: m.role, content: String(m.content || "") })),
     }),
   });
-  const data = await r.json();
-  if (data.error) throw new Error(data.error.message || "Error de la API");
-  return (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("\n").trim();
+}
+
+// Llama a la API con reintentos automáticos ante errores pasajeros.
+async function getReply(system, messages) {
+  let ultimoError = null;
+
+  for (let intento = 1; intento <= MAX_INTENTOS; intento++) {
+    let r;
+    try {
+      r = await llamarAnthropic(system, messages);
+    } catch (e) {
+      // Error de red / fetch falló: es pasajero, reintenta.
+      ultimoError = e;
+      if (intento < MAX_INTENTOS) { await dormir(calcularEspera(intento)); continue; }
+      throw ultimoError;
+    }
+
+    // Éxito (200): procesa y devuelve la respuesta.
+    if (r.ok) {
+      const data = await r.json();
+      if (data.error) throw new Error(data.error.message || "Error de la API");
+      return (data.content || [])
+        .filter((b) => b.type === "text")
+        .map((b) => b.text)
+        .join("\n")
+        .trim();
+    }
+
+    // Error PASAJERO (429, 500, 529...): espera y reintenta.
+    if (RETRYABLE_STATUS.has(r.status) && intento < MAX_INTENTOS) {
+      // Si la API dice cuánto esperar (header "retry-after"), respétalo.
+      const retryAfter = Number(r.headers.get("retry-after"));
+      const esperaMs = retryAfter > 0 ? retryAfter * 1000 : calcularEspera(intento);
+      ultimoError = new Error(`La API respondió ${r.status}`);
+      await dormir(esperaMs);
+      continue;
+    }
+
+    // Error NO pasajero (400, 401, 403...) o se acabaron los intentos: falla con el mensaje real.
+    let msg = `Error ${r.status} de la API`;
+    try { const data = await r.json(); if (data.error?.message) msg = data.error.message; } catch {}
+    throw new Error(msg);
+  }
+
+  throw ultimoError || new Error("Error de la API tras varios intentos");
 }
 
 export default async function handler(req, res) {
