@@ -64,6 +64,9 @@
   .bub.bot em{font-style:italic}
   .bub.bot a{color:var(--blue);font-weight:600;text-decoration:underline}
   .bub.bot hr.sep{border:0;border-top:1px solid #e8ecf3;margin:10px 0}
+  /* cursor parpadeante mientras escribe */
+  .bub.bot .caret{display:inline-block;width:7px;height:1.05em;vertical-align:-2px;margin-left:1px;background:var(--blue);opacity:.75;animation:blink 1s steps(1) infinite;border-radius:1px}
+  @keyframes blink{50%{opacity:0}}
   .row.bot{gap:9px;align-items:flex-start}
   .row.bot .av{width:28px;height:28px;flex-shrink:0;margin-top:2px}
   .typing{color:#8a93a3;font-size:13.5px;display:flex;align-items:center;gap:9px}
@@ -291,22 +294,118 @@ function setTyping(on){
     msgsEl.appendChild(t); msgsEl.scrollTop=msgsEl.scrollHeight; } }
   else if(t){ t.remove(); }
 }
+
+// ============================================================
+//  STREAMING + EFECTO DE ESCRITURA (typewriter)
+//  El servidor envía la respuesta filtrada, frase por frase.
+//  Aquí la revelamos letra por letra para que se vea en vivo.
+// ============================================================
+let _liveRow=null, _liveBub=null, _displayed='', _target='', _timer=null, _streamDone=false, _started=false;
+
+function _resetStream(){
+  if(_timer){ clearInterval(_timer); _timer=null; }
+  _liveRow=null; _liveBub=null; _displayed=''; _target=''; _streamDone=false; _started=false;
+}
+function _ensureBubble(){
+  if(_liveRow) return;
+  _liveRow=document.createElement('div'); _liveRow.className='row bot';
+  _liveRow.innerHTML='<div class="av">'+EMBLEM+'</div>';
+  _liveBub=document.createElement('div'); _liveBub.className='bub bot';
+  _liveRow.appendChild(_liveBub);
+  msgsEl.appendChild(_liveRow);
+}
+function _paint(){
+  // muestra lo revelado + un cursor parpadeante mientras siga llegando texto
+  const showCaret = !(_streamDone && _displayed.length>=_target.length);
+  _liveBub.innerHTML = formatBot(_displayed) + (showCaret?'<span class="caret"></span>':'');
+  msgsEl.scrollTop = msgsEl.scrollHeight;
+}
+function _pump(){
+  if(_timer) return;
+  _timer=setInterval(()=>{
+    if(_displayed.length < _target.length){
+      // si hay mucho texto en cola, acelera para no quedar atrás
+      const backlog=_target.length-_displayed.length;
+      const step = backlog>140?10 : backlog>50?4 : 1;
+      _displayed=_target.slice(0,_displayed.length+step);
+      _paint();
+    } else if(_streamDone){
+      clearInterval(_timer); _timer=null;
+      _finalize();
+    }
+  }, 16);
+}
+function _finalize(){
+  const finalText=_target;
+  if(_liveRow){ _liveRow.remove(); }
+  _resetStream();
+  history.push({role:'assistant',content: finalText || "No pude responder. Intenta de nuevo."});
+  render(); // re-dibuja con botón de compartir
+}
+
 async function send(text){
   const input=document.getElementById('chatInput');
   const content=(text!==undefined?text:input.value).trim(); if(!content) return;
   if(text===undefined) input.value='';
   history.push({role:'user',content}); render(); setTyping(true);
+
+  _resetStream();
+
   try{
     const res=await fetch("/api/chat",{
       method:"POST", headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({messages:history.map(m=>({role:m.role,content:m.content}))})
+      body:JSON.stringify({stream:true, messages:history.map(m=>({role:m.role,content:m.content}))})
     });
-    const data=await res.json(); setTyping(false);
-    history.push({role:'assistant',content:data.reply || data.error || "No pude responder. Intenta de nuevo."});
-    render();
+
+    const ctype=(res.headers.get('content-type')||'');
+    // RESPALDO: si el servidor respondió en modo clásico (JSON), úsalo tal cual.
+    if(!res.ok || !res.body || ctype.indexOf('text/event-stream')===-1){
+      const data=await res.json().catch(()=>({}));
+      setTyping(false);
+      history.push({role:'assistant',content:data.reply || data.error || "No pude responder. Intenta de nuevo."});
+      render(); return;
+    }
+
+    // Lee el stream (Server-Sent Events)
+    const reader=res.body.getReader();
+    const decoder=new TextDecoder();
+    let sseBuf='';
+    while(true){
+      const {value,done}=await reader.read();
+      if(done) break;
+      sseBuf+=decoder.decode(value,{stream:true});
+      let i;
+      while((i=sseBuf.indexOf('\n\n'))!==-1){
+        const evt=sseBuf.slice(0,i); sseBuf=sseBuf.slice(i+2);
+        const dl=evt.split('\n').filter(l=>l.startsWith('data:')).map(l=>l.slice(5).trim()).join('');
+        if(!dl || dl==='[DONE]') continue;
+        let obj; try{obj=JSON.parse(dl);}catch{continue;}
+        if(obj.text){
+          if(!_started){ _started=true; setTyping(false); _ensureBubble(); }
+          _target+=obj.text; _pump();
+        } else if(obj.error){
+          if(!_started){ _started=true; setTyping(false); _ensureBubble(); }
+          _target+=(_target?'\n':'')+obj.error; _pump();
+        }
+      }
+    }
+
+    _streamDone=true;
+    if(!_started){
+      // No llegó nada de texto
+      setTyping(false);
+      _resetStream();
+      history.push({role:'assistant',content:"No pude responder. Intenta de nuevo."});
+      render();
+    } else {
+      _pump(); // deja que termine de revelar y luego finaliza
+    }
   }catch(e){
     setTyping(false);
-    history.push({role:'assistant',content:"Hubo un problema de conexión. Intenta de nuevo."});
+    const partial=_target;
+    if(_liveRow){ _liveRow.remove(); }
+    _resetStream();
+    history.push({role:'assistant',content: partial || "Hubo un problema de conexión. Intenta de nuevo."});
     render();
   }
 }
