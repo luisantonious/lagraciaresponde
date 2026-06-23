@@ -56,6 +56,10 @@ const SYSTEM = `Eres el asistente de «La Gracia Responde», el ministerio del P
 REGLA ABSOLUTA — SIN ATRIBUCIONES A PERSONAS:
 - Nunca atribuyas tus respuestas a maestros por nombre (ni Andrew Farley, ni Joseph Prince, ni nadie). Tu única autoridad citada es la Biblia. Si te preguntan en quién te basas, di que te fundamentas en la Palabra de Dios.
 
+REGLA ABSOLUTA — NO FIRMES NI TE HAGAS PASAR POR EL PASTOR:
+- NUNCA agregues una firma, encabezado, pie de página ni cierre tipo «—La Gracia Responde, Ministerio del Pastor…», ni menciones tu nombre o el del pastor al final. Entrega SOLO el contenido de la respuesta. La identidad del ministerio se muestra aparte (no la pongas tú).
+- El usuario NO está hablando con el Pastor Luis Antonio Valera. Eres una herramienta de estudio. Nunca hables en primera persona como si fueras el pastor ni des a entender que la persona conversa directamente con él.
+
 CÓMO RESPONDES:
 - Tono del Pastor Valera: directo, sencillo, alentador y consolador. Explicas lo difícil de forma simple; si usas una palabra sofisticada, la explicas ahí mismo de forma natural, sin sonar a profesor.
 - SÉ BREVE Y SENCILLO, pensando en alguien nuevo en la fe. Empieza SIEMPRE con «En breve:» y una o dos frases claras. Luego, solo si hace falta, 2 a 4 frases simples. Nada de respuestas largas tipo enciclopedia.
@@ -87,6 +91,11 @@ function sanitize(text) {
   out = out.replace(/seg[uú]n\s+(las\s+)?ense[ñn]anzas?\s+de[^.,;]*/gi, "según la Escritura");
   return out || "Mi fundamento es la Palabra de Dios. Veámoslo directamente en la Escritura.";
 }
+
+// ===== FIRMA FIJA (la pone el código, NO el modelo) =====
+// Así la firma sale IDÉNTICA siempre y nunca insinúa que se habla con el pastor.
+// El separador "---" se ve como una línea divisoria en la web y en WhatsApp.
+const SIGNATURE = `\n\n---\n"La Gracia Responde" — Ministerio de la Iglesia Nuevas Buenas\nwww.nuevasbuenas.org`;
 
 // ===== REINTENTOS AUTOMÁTICOS =====
 // Errores PASAJEROS que vale la pena reintentar (429 = demasiadas solicitudes,
@@ -192,6 +201,11 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Solicitud mal formada." });
   }
 
+  // ¿Es la PRIMERA respuesta de la conversación? (aún no hay ninguna respuesta del bot en el historial).
+  // Si es la primera, agregamos la firma; si no, la omitimos para no repetirla.
+  const isFirstReply = !messages.some((m) => m && m.role === "assistant");
+  const firma = isFirstReply ? SIGNATURE : "";
+
   // ====== RESPALDO: modo clásico (JSON) si el navegador no pide streaming ======
   if (!wantsStream) {
     try {
@@ -200,7 +214,8 @@ export default async function handler(req, res) {
         reply = await getReply(SYSTEM + "\n\nRECORDATORIO ESTRICTO: no menciones a ningún pastor o maestro por nombre ni atribuyas la respuesta a personas. Cita únicamente la Biblia.", messages);
       }
       if (violates(reply)) reply = sanitize(reply);
-      return res.status(200).json({ reply: reply || "Disculpa, no pude responder en este momento." });
+      reply = (reply || "Disculpa, no pude responder en este momento.") + firma;
+      return res.status(200).json({ reply });
     } catch (e) {
       return res.status(500).json({ error: "Error del servidor. Intenta de nuevo." });
     }
@@ -266,7 +281,11 @@ export default async function handler(req, res) {
       }
     }
     flush(true); // envía lo que quede (última frase)
-    if (!emittedAny) sse({ text: "Disculpa, no pude responder en este momento. Intenta de nuevo." });
+    if (!emittedAny) {
+      sse({ text: "Disculpa, no pude responder en este momento. Intenta de nuevo." });
+    } else if (firma) {
+      sse({ text: firma }); // ← firma fija, solo en la primera respuesta de la conversación
+    }
     res.write("data: [DONE]\n\n");
     res.end();
   } catch (e) {
